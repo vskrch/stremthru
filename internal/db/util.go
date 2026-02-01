@@ -74,9 +74,11 @@ func ParseConnectionURI(connection_uri string) (ConnectionURI, error) {
 		if u.Host != "" && u.Host != "." {
 			return uri, errors.New("invalid path, must start with '/' or './'")
 		}
-	case "postgresql":
+	case "postgres", "postgresql":
 		uri.Dialect = DBDialectPostgres
 		uri.DriverName = "pgx"
+		// Normalize scheme to postgresql for consistency
+		u.Scheme = "postgresql"
 	default:
 		return uri, errors.New("unsupported scheme: " + u.Scheme)
 	}

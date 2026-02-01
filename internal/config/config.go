@@ -100,6 +100,19 @@ func getEnv(key string) string {
 	return ""
 }
 
+// getEnvWithFallback checks for the primary key, then falls back to the fallback key
+func getEnvWithFallback(key string, fallbackKey string) string {
+	if value, exists := os.LookupEnv(key); exists && len(value) > 0 {
+		return value
+	}
+	if fallbackKey != "" {
+		if value, exists := os.LookupEnv(fallbackKey); exists && len(value) > 0 {
+			return value
+		}
+	}
+	return getEnv(key)
+}
+
 func parseDuration(key string, value string, boundary ...time.Duration) (time.Duration, error) {
 	if duration, err := time.ParseDuration(value); err != nil {
 		return -1, fmt.Errorf("invalid %s (%s): %v", key, value, err)
@@ -481,7 +494,7 @@ var config = func() Config {
 		peerUrl, peerAuthToken = parseUri(peerUri)
 	}
 
-	databaseUri := getEnv("STREMTHRU_DATABASE_URI")
+	databaseUri := getEnvWithFallback("STREMTHRU_DATABASE_URI", "DATABASE_URL")
 
 	feature := FeatureConfig{
 		disabled: []string{FeatureAnime, FeatureStremioP2P},
@@ -590,7 +603,7 @@ var config = func() Config {
 		LogLevel:  logLevel,
 		LogFormat: logFormat,
 
-		Port:                        getEnv("STREMTHRU_PORT"),
+		Port:                        getEnvWithFallback("STREMTHRU_PORT", "PORT"),
 		ProxyAuthPassword:           proxyAuthPasswordMap,
 		AuthAdmin:                   authAdminMap,
 		AdminPassword:               adminPasswordMap,

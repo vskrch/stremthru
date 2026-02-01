@@ -1,0 +1,26 @@
+{
+    "name": "stremthru",
+    "description": "Stremio Companion with Debrid Integration",
+    "stack": "container",
+    "addons": [
+        "heroku-postgresql:essential-0"
+    ],
+    "env": {
+        "STREMTHRU_BASE_URL": {
+            "description": "Public URL of your Heroku app (e.g., https://your-app.herokuapp.com)",
+            "required": true
+        },
+        "STREMTHRU_PROXY_AUTH": {
+            "description": "Proxy auth credentials in username:password format",
+            "required": true
+        },
+        "STREMTHRU_STORE_AUTH": {
+            "description": "Store auth in format *:realdebrid:<api-token>",
+            "required": true
+        },
+        "STREMTHRU_STORE_CONTENT_PROXY": {
+            "description": "Enable content proxy for stores",
+            "value": "realdebrid:true"
+        }
+    }
+}

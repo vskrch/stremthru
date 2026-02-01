@@ -30,4 +30,5 @@ ENV STREMTHRU_ENV=prod
 
 EXPOSE 8080
 
-ENTRYPOINT ["./stremthru"]
+ENTRYPOINT []
+CMD ["./stremthru"]
