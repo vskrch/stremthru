@@ -31,5 +31,17 @@
             "description": "Features to disable for proxy-only mode",
             "value": "-stremio_list,-stremio_sidekick,-stremio_store,-stremio_torz,-stremio_wrap,-imdb_title,-dmm_hashlist,-vault"
         }
+    },
+    "environments": {
+        "test": {
+            "env": {
+                "STREMTHRU_BASE_URL": "http://localhost:PORT",
+                "STREMTHRU_PROXY_AUTH": "test:test",
+                "STREMTHRU_STORE_AUTH": "*:realdebrid:test-token"
+            },
+            "scripts": {
+                "test": "go test -v ./internal/netmon/... ./internal/endpoint/..."
+            }
+        }
     }
 }
