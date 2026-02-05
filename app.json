@@ -1,10 +1,7 @@
 {
     "name": "stremthru",
-    "description": "Stremio Companion with Debrid Integration",
+    "description": "StremThru Proxy Service with Debrid Integration",
     "stack": "container",
-    "addons": [
-        "heroku-postgresql:essential-0"
-    ],
     "env": {
         "STREMTHRU_BASE_URL": {
             "description": "Public URL of your Heroku app (e.g., https://your-app.herokuapp.com)",
@@ -19,8 +16,20 @@
             "required": true
         },
         "STREMTHRU_STORE_CONTENT_PROXY": {
-            "description": "Enable content proxy for stores",
-            "value": "realdebrid:true"
+            "description": "CRITICAL: Must be true to proxy content through StremThru (prevents IP leak)",
+            "value": "*:true"
+        },
+        "STREMTHRU_STORE_TUNNEL": {
+            "description": "CRITICAL: Must be true so RealDebrid only sees StremThru's IP",
+            "value": "*:true"
+        },
+        "STREMTHRU_DATABASE_URI": {
+            "description": "Database URI (uses ephemeral SQLite for proxy-only mode)",
+            "value": "sqlite://./data/stremthru.db"
+        },
+        "STREMTHRU_FEATURE": {
+            "description": "Features to disable for proxy-only mode",
+            "value": "-stremio_list,-stremio_sidekick,-stremio_store,-stremio_torz,-stremio_wrap,-imdb_title,-dmm_hashlist,-vault"
         }
     }
 }
