@@ -1,741 +1,1245 @@
-[![GitHub Workflow Status: CI](https://img.shields.io/github/actions/workflow/status/MunifTanjim/stremthru/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/MunifTanjim/stremthru/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/MunifTanjim/stremthru?style=for-the-badge)](https://github.com/MunifTanjim/stremthru/blob/master/LICENSE)
-
 # StremThru
 
-Companion for Stremio.
+<div align="center">
 
-## Features
+**Privacy-First Debrid Proxy for Stremio**
 
-- HTTP(S) Proxy
-- Proxy Authorization
-- [Byte Serving](https://en.wikipedia.org/wiki/Byte_serving)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://hub.docker.com/r/muniftanjim/stremthru)
 
-### Store Integration
+*A secure proxy service that shields your IP address from debrid providers like RealDebrid, AllDebrid, and more.*
 
-- [AllDebrid](https://alldebrid.com)
-- [Debrider](https://debrider.app)
-- [Debrid-Link](https://debrid-link.com)
-- [EasyDebrid](https://easydebrid.com)
-- [Offcloud](https://offcloud.com)
-- [PikPak](https://mypikpak.com)
-- [Premiumize](https://www.premiumize.me)
-- [RealDebrid](https://real-debrid.com)
-- [TorBox](https://torbox.app)
+</div>
 
-### SDK
+---
 
-- [JavaScript](./sdk/js)
-- [Python](./sdk/py)
+## Table of Contents
 
-### Concepts
+- [Overview](#overview)
+  - [Key Features](#key-features)
+  - [Supported Debrid Services](#supported-debrid-services)
+  - [Architecture Summary](#architecture-summary)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Local Development](#local-development)
+  - [Docker Deployment](#docker-deployment)
+  - [Heroku Deployment](#heroku-deployment)
+- [Configuration Reference](#configuration-reference)
+  - [Environment Variables](#environment-variables)
+  - [Feature Flags](#feature-flags)
+  - [Tunnel Configuration](#tunnel-configuration)
+- [Cloudflare WARP Integration](#cloudflare-warp-integration)
+  - [Overview](#warp-overview)
+  - [Setup Guide](#warp-setup-guide)
+  - [Configuration](#warp-configuration)
+  - [Troubleshooting WARP](#warp-troubleshooting)
+- [API Reference](#api-reference)
+  - [Health Endpoints](#health-endpoints)
+  - [Proxy Endpoints](#proxy-endpoints)
+  - [Store Endpoints](#store-endpoints)
+  - [Stremio Addons](#stremio-addons)
+- [System Design](#system-design)
+  - [Architecture Diagram](#architecture-diagram)
+  - [Request Flow](#request-flow)
+  - [Data Flow](#data-flow)
+  - [Component Interactions](#component-interactions)
+- [Commands Reference](#commands-reference)
+  - [Go Commands](#go-commands)
+  - [Make Commands](#make-commands)
+  - [Node/PNPM Commands](#nodepnpm-commands)
+  - [Heroku Commands](#heroku-commands)
+- [Operations](#operations)
+  - [Logging](#logging)
+  - [Monitoring](#monitoring)
+  - [Database Management](#database-management)
+  - [Scaling Considerations](#scaling-considerations)
+- [Security](#security)
+  - [Authentication](#authentication)
+  - [IP Privacy Model](#ip-privacy-model)
+  - [Secrets Handling](#secrets-handling)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+  - [Repository Structure](#repository-structure)
+  - [Coding Standards](#coding-standards)
+  - [Pull Request Process](#pull-request-process)
+- [License](#license)
 
-#### Store
+---
 
-_Store_ is an external service that provides access to content. StremThru acts as an interface for the _store_.
+## Overview
 
-#### Store Content Proxy
+StremThru is a Go-based proxy service designed to act as an intermediary between you and debrid services (RealDebrid, AllDebrid, Premiumize, etc.). Its primary purpose is to **protect your IP address** from being exposed to debrid providers.
 
-StremThru can proxy the content from the _store_. For proxy authorized requests, this is enabled by default.
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔒 **IP Privacy** | Debrid services only see StremThru's IP, never yours |
+| 🌐 **Cloudflare WARP** | Optional integration to use Cloudflare's network |
+| 📺 **Stremio Integration** | Native Stremio addon support for seamless streaming |
+| 🔄 **Content Proxy** | Proxies video content with byte-range support |
+| 🗄️ **Multi-Database** | Supports SQLite (default) and PostgreSQL |
+| 🐳 **Docker Ready** | Multi-stage Dockerfile for minimal image size |
+| ☁️ **Heroku Ready** | One-click deployment with `app.json` |
+
+### Supported Debrid Services
+
+| Service | Status | Code |
+|---------|--------|------|
+| RealDebrid | ✅ Fully Supported | `realdebrid` |
+| AllDebrid | ✅ Fully Supported | `alldebrid` |
+| Premiumize | ✅ Fully Supported | `premiumize` |
+| DebridLink | ✅ Fully Supported | `debridlink` |
+| TorBox | ✅ Fully Supported | `torbox` |
+| Offcloud | ✅ Fully Supported | `offcloud` |
+| EasyDebrid | ✅ Fully Supported | `easydebrid` |
+| PikPak | ✅ Fully Supported | `pikpak` |
+
+### Architecture Summary
 
 ```mermaid
-sequenceDiagram
-    participant User as User Device
-    participant StremThru as StremThru
-    participant Store as Store
-
-    User->>StremThru: Request Content
-    StremThru->>Store: Request Content
-    loop Byte Serving
-      Store-->>StremThru: Content Chunk
-      StremThru-->>User: Content Chunk
+graph LR
+    subgraph "Your Network"
+        A[Stremio Client]
     end
+    
+    subgraph "StremThru Server"
+        B[StremThru Proxy]
+        C[WireProxy/WARP]
+    end
+    
+    subgraph "External Services"
+        D[RealDebrid API]
+        E[RealDebrid CDN]
+    end
+    
+    A -->|Your IP Hidden| B
+    B -->|SOCKS5| C
+    C -->|Cloudflare IP| D
+    C -->|Cloudflare IP| E
+    
+    style A fill:#e1f5fe
+    style B fill:#fff3e0
+    style C fill:#f3e5f5
+    style D fill:#e8f5e9
+    style E fill:#e8f5e9
 ```
 
-#### Store Tunnel
+---
 
-If you can't access the _store_ using your IP, you can use HTTP(S) Proxy to tunnel the traffic to the _store_.
+## Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/MunifTanjim/stremthru.git
+cd stremthru
+
+# Copy environment file
+cp .env.example .env
+
+# Edit with your credentials
+# STREMTHRU_PROXY_AUTH=admin:yourpassword
+# STREMTHRU_STORE_AUTH=*:realdebrid:YOUR_API_TOKEN
+
+# Run with Docker
+docker-compose up -d
+
+# Or run locally
+go run --tags "fts5" .
+```
+
+---
+
+## Installation
+
+### Prerequisites
+
+| Requirement | Version | Purpose |
+|-------------|---------|---------|
+| Go | 1.25+ | Backend compilation |
+| Node.js | 22+ | Dashboard frontend |
+| pnpm | 10.17+ | Package manager |
+| Docker | 24+ | Container deployment (optional) |
+| Heroku CLI | Latest | Heroku deployment (optional) |
+
+### Local Development
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/MunifTanjim/stremthru.git
+cd stremthru
+
+# 2. Install frontend dependencies
+corepack enable
+pnpm install
+
+# 3. Build the dashboard
+pnpm run dash:build
+
+# 4. Create environment file
+cp .env.example .env
+
+# 5. Configure your credentials (edit .env)
+STREMTHRU_PROXY_AUTH=admin:password123
+STREMTHRU_STORE_AUTH=*:realdebrid:YOUR_RD_API_KEY
+STREMTHRU_DATABASE_URI=sqlite://./data/stremthru.db
+
+# 6. Run the application
+go run --tags "fts5" .
+
+# Server starts at http://localhost:8080
+```
+
+### Docker Deployment
+
+#### Using Docker Compose (Recommended)
+
+```yaml
+# compose.yaml
+services:
+  stremthru:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - STREMTHRU_PROXY_AUTH=admin:password123
+      - STREMTHRU_STORE_AUTH=*:realdebrid:YOUR_API_KEY
+      - STREMTHRU_DATABASE_URI=sqlite://./data/stremthru.db
+      - STREMTHRU_STORE_CONTENT_PROXY=*:true
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+```
+
+```bash
+# Start the service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f stremthru
+
+# Stop the service
+docker-compose down
+```
+
+#### Using Docker CLI
+
+```bash
+# Build the image
+docker build -t stremthru .
+
+# Run the container
+docker run -d \
+  --name stremthru \
+  -p 8080:8080 \
+  -e STREMTHRU_PROXY_AUTH=admin:password123 \
+  -e STREMTHRU_STORE_AUTH=*:realdebrid:YOUR_API_KEY \
+  -v $(pwd)/data:/app/data \
+  stremthru
+```
+
+### Heroku Deployment
+
+#### One-Click Deploy
+
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+
+#### Manual Deployment
+
+```bash
+# 1. Create Heroku app
+heroku create your-app-name --stack container
+
+# 2. Set environment variables
+heroku config:set STREMTHRU_BASE_URL=https://your-app-name.herokuapp.com
+heroku config:set STREMTHRU_PROXY_AUTH=admin:yourpassword
+heroku config:set STREMTHRU_STORE_AUTH=*:realdebrid:YOUR_API_KEY
+heroku config:set STREMTHRU_STORE_CONTENT_PROXY=*:true
+heroku config:set STREMTHRU_STORE_TUNNEL=*:true
+heroku config:set STREMTHRU_DATABASE_URI=sqlite://./data/stremthru.db
+
+# 3. Deploy
+git push heroku main
+
+# 4. Verify deployment
+heroku logs --tail
+curl https://your-app-name.herokuapp.com/v0/health
+```
+
+---
+
+## Configuration Reference
+
+### Environment Variables
+
+#### Core Configuration
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `STREMTHRU_ENV` | No | `dev` | Environment: `dev`, `prod`, `test` |
+| `STREMTHRU_BASE_URL` | No | Auto-detected | Public URL of your instance |
+| `STREMTHRU_PORT` | No | `8080` | HTTP server port |
+| `STREMTHRU_DATABASE_URI` | No | `sqlite://./data/stremthru.db` | Database connection string |
+
+#### Authentication
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `STREMTHRU_PROXY_AUTH` | **Yes** | - | Proxy auth in `user:pass` format. Multiple: `user1:pass1,user2:pass2` |
+| `STREMTHRU_STORE_AUTH` | **Yes** | - | Store auth in `user:store:token` format. Use `*` for any user |
+| `STREMTHRU_ADMIN_PASSWORD` | No | - | Admin password for dashboard access |
+
+**Example:**
+```bash
+# Single user
+STREMTHRU_PROXY_AUTH=admin:secretpassword
+
+# Multiple users
+STREMTHRU_PROXY_AUTH=user1:pass1,user2:pass2
+
+# Store auth for any user with RealDebrid
+STREMTHRU_STORE_AUTH=*:realdebrid:YOUR_RD_API_KEY
+
+# Store auth for specific user
+STREMTHRU_STORE_AUTH=john:realdebrid:JOHNS_API_KEY
+```
+
+#### Proxy & Tunnel
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `STREMTHRU_HTTP_PROXY` | No | - | HTTP/SOCKS5 proxy URL |
+| `STREMTHRU_TUNNEL` | No | - | Tunnel configuration per hostname |
+| `STREMTHRU_STORE_TUNNEL` | No | `*:true` | Whether to tunnel store traffic |
+| `STREMTHRU_STORE_CONTENT_PROXY` | No | - | Proxy content through StremThru |
+
+**Tunnel Configuration Syntax:**
+```bash
+# Tunnel all traffic
+STREMTHRU_STORE_TUNNEL=*:true
+
+# Tunnel only API calls, not streams
+STREMTHRU_STORE_TUNNEL=*:api
+
+# Disable tunnel for specific store
+STREMTHRU_STORE_TUNNEL=*:true,realdebrid:false
+```
+
+#### Database
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `STREMTHRU_DATABASE_URI` | No | `sqlite://./data/stremthru.db` | Database URI |
+| `DATABASE_URL` | No | - | Alternative database URI (Heroku) |
+
+**Database URI Formats:**
+```bash
+# SQLite (default)
+STREMTHRU_DATABASE_URI=sqlite://./data/stremthru.db
+
+# PostgreSQL
+STREMTHRU_DATABASE_URI=postgres://user:pass@host:5432/dbname
+```
+
+### Feature Flags
+
+Control which features are enabled using `STREMTHRU_FEATURE`:
+
+```bash
+# Disable features (prefix with -)
+STREMTHRU_FEATURE=-stremio_store,-stremio_wrap,-stremio_sidekick
+
+# Enable specific features only
+STREMTHRU_FEATURE=stremio_store,stremio_wrap
+```
+
+| Feature | Description | Default |
+|---------|-------------|---------|
+| `stremio_store` | Stremio Store addon | Enabled |
+| `stremio_wrap` | Stremio Wrap addon | Enabled |
+| `stremio_sidekick` | Stremio Sidekick addon | Enabled |
+| `stremio_list` | Stremio List addon | Enabled |
+| `stremio_torz` | Stremio Torz addon | Enabled |
+| `imdb_title` | IMDB title syncing | Enabled |
+| `dmm_hashlist` | DMM hashlist syncing | Enabled |
+| `vault` | Vault features | Enabled |
+
+**Proxy-Only Mode Configuration:**
+```bash
+# Disable all non-essential features for minimal proxy
+STREMTHRU_FEATURE=-stremio_list,-stremio_sidekick,-stremio_store,-stremio_torz,-stremio_wrap,-imdb_title,-dmm_hashlist,-vault
+```
+
+---
+
+## Cloudflare WARP Integration
+
+### WARP Overview
+
+Cloudflare WARP integration routes all outbound traffic through Cloudflare's network, ensuring debrid services see a Cloudflare IP instead of your server's IP.
 
 ```mermaid
 sequenceDiagram
-    participant Client as StremThru
-    participant Proxy as HTTP(S) Proxy
-    participant Server as Store
+    participant User as Stremio User
+    participant ST as StremThru
+    participant WP as WireProxy<br/>(SOCKS5)
+    participant CF as Cloudflare<br/>WARP
+    participant RD as RealDebrid
 
-    Client->>Proxy: HTTP Request
-    Proxy->>Server: Forward HTTP Request
-    Server->>Proxy: HTTP Response
-    Proxy->>Client: Forward HTTP Response
+    User->>ST: Request stream
+    ST->>WP: Forward via SOCKS5
+    WP->>CF: WireGuard tunnel
+    CF->>RD: API request (CF IP: 104.28.x.x)
+    RD-->>CF: Response
+    CF-->>WP: Response
+    WP-->>ST: Response
+    ST-->>User: Stream content
+
+    Note over RD: RealDebrid only sees<br/>Cloudflare IP
 ```
 
-## Configuration
+### WARP Setup Guide
 
-Configuration is done using environment variables.
+#### Step 1: Generate WARP Credentials
 
-#### `STREMTHRU_BASE_URL`
+```bash
+# Download wgcf
+curl -Lo wgcf https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_2.2.22_darwin_amd64
+chmod +x wgcf
 
-Base URL for StremThru.
+# Register WARP account
+./wgcf register --accept-tos
 
-#### `STREMTHRU_PORT`
+# Generate WireGuard profile
+./wgcf generate
 
-Port to listen on, default `8080`.
-
-#### `STREMTHRU_LOG_LEVEL`
-
-Log level.
-
-| Log Level          |
-| ------------------ |
-| `TRACE`            |
-| `DEBUG`            |
-| `INFO` _(default)_ |
-| `WARN`             |
-| `ERROR`            |
-| `FATAL`            |
-
-#### `STREMTHRU_LOG_FORMAT`
-
-Log format.
-
-| Log Level          |
-| ------------------ |
-| `json` _(default)_ |
-| `text`             |
-
-#### `STREMTHRU_DATA_DIR`
-
-Data directory.
-
-#### `STREMTHRU_HTTP_PROXY`
-
-HTTP Proxy URL.
-
-#### `STREMTHRU_TUNNEL`
-
-> [!WARNING]
-> Can not override `STREMTHRU_STORE_TUNNEL`.
-
-Comma separated list of tunnel config, in `hostname:tunnel_config` format.
-
-| `tunnel_config` | Description                        |
-| --------------- | ---------------------------------- |
-| `true`          | Enable with `STREMTHRU_HTTP_PROXY` |
-| `false`         | Disable                            |
-
-If `hostname` is `*`, and `tunnel_config` is `false`, only explicitly enabled hostnames
-will be tunneled.
-
-#### `STREMTHRU_PROXY_AUTH`
-
-Comma separated list of credentials, in the following formats:
-
-- plain text credentials, e.g. `username:password`
-- or base64 encoded credentials, e.g. `dXNlcm5hbWU6cGFzc3dvcmQ=`
-
-These will be used for proxy authorization.
-
-#### `STREMTHRU_AUTH_ADMIN`
-
-Comma separated list of admin usernames.
-
-#### `STREMTHRU_STORE_AUTH`
-
-Comma separated list of store credentials, in `username:store_name:store_token` format.
-
-For proxy-authorized requests, these credentials will be used.
-
-If `username` is `*`, it is used as fallback for users without explicit store credentials.
-
-| Store       | `store_name` | `store_token`        |
-| ----------- | ------------ | -------------------- |
-| AllDebrid   | `alldebrid`  | `<api-key>`          |
-| Debrider    | `debrider`   | `<api-key>`          |
-| Debrid-Link | `debridlink` | `<api-key>`          |
-| EasyDebrid  | `easydebrid` | `<api-key>`          |
-| Offcloud    | `offcloud`   | `<email>:<password>` |
-| PikPak      | `pikpak`     | `<email>:<password>` |
-| Premiumize  | `premiumize` | `<api-key>`          |
-| RealDebrid  | `realdebrid` | `<api-token>`        |
-| Torbox      | `torbox`     | `<api-key>`          |
-
-#### `STREMTHRU_STORE_TUNNEL`
-
-> [!WARNING]
-> Only used when using StremThru to interact with the Store. Not affected by `STREMTHRU_TUNNEL`.
-> StremThru will _**try**_ to automatically adjust `STREMTHRU_TUNNEL` to reflect `STREMTHRU_STORE_TUNNEL`.
-
-Comma separated list of tunnel config for stores, in `store_name:tunnel_config` format.
-
-| `tunnel_config` | Description         |
-| --------------- | ------------------- |
-| `true`          | Enable              |
-| `false`         | Disable             |
-| `api`           | Enable for API only |
-
-If `store_name` is `*`, it is used as fallback.
-
-When enabled, `STREMTHRU_HTTP_PROXY` will be used to tunnel traffic for the store.
-
-#### `STREMTHRU_STORE_CONTENT_PROXY`
-
-Comma separated list of store content proxy config, in `store_name:content_proxy_config` format.
-
-| `content_proxy_config` | Description |
-| ---------------------- | ----------- |
-| `true`                 | Enable      |
-| `false`                | Disable     |
-
-If `store_name` is `*`, it is used as fallback.
-
-When enabled, StremThru will proxy the content from the store.
-
-#### `STREMTHRU_CONTENT_PROXY_CONNECTION_LIMIT`
-
-Comma separated list of content proxy connection limit per user, in `username:connection_limit` format.
-
-If `username` is `*`, it is used as fallback.
-
-If `connection_limit` is `0`, no connection limit is applied.
-
-#### `STREMTHRU_STORE_CONTENT_CACHED_STALE_TIME`
-
-Comma separated list of stale time for cached/uncached content in store, in `store_name:cached_stale_time:uncached_stale_time` format.
-e.g. `*:24h:8h`.
-
-If `store_name` is `*`, it is used as fallback.
-
-#### `STREMTHRU_PEER_URI`
-
-URI for peer StremThru instance, in format `https://:<pass>@<host>[:<port>]`.
-
-#### `STREMTHRU_REDIS_URI`
-
-URI for Redis, in format `redis://<user>:<pass>@<host>[:<port>][/<db>]`.
-
-If provided, it'll be used for caching instead of in-memory storage.
-
-#### `STREMTHRU_DATABASE_URI`
-
-URI for Database, in format `<scheme>://<user>:<pass>@<host>[:<port>][/<db>]`.
-
-Supports `sqlite` and `postgresql`.
-
-#### `STREMTHRU_FEATURE`
-
-Comma separated list of features to enable/disable.
-
-Use `-` prefix to disable opt-out feature, and `+` prefix to enable opt-in feature.
-Otherwise only the specified features will be enabled.
-
-#### `STREMTHRU_STREMIO_LIST_PUBLIC_MAX_LIST_COUNT`
-
-Max number of list allowed on public instance.
-
-#### `STREMTHRU_STREMIO_STORE_CATALOG_ITEM_LIMIT`
-
-Max number of items to fetch for catalog.
-
-#### `STREMTHRU_STREMIO_STORE_CATALOG_CACHE_TIME`
-
-Cache time for catalog.
-
-#### `STREMTHRU_STREMIO_TORZ_LAZY_PULL`
-
-If `true`, torz will pull from public database in the background,
-so on first query it'll return less results, but it'll be faster.
-
-#### `STREMTHRU_STREMIO_TORZ_PUBLIC_MAX_STORE_COUNT`
-
-Max number of stores allowed on public instance.
-
-#### `STREMTHRU_STREMIO_WRAP_PUBLIC_MAX_UPSTREAM_COUNT`
-
-Max number of upstream allowed on public instance.
-
-#### `STREMTHRU_STREMIO_WRAP_PUBLIC_MAX_STORE_COUNT`
-
-Max number of stores allowed on public instance.
-
-#### AniList Integration
-
-##### `STREMTHRU_INTEGRATION_ANILIST_LIST_STALE_TIME`
-
-Stale time for list. e.g. `12h`.
-
-#### GitHub Integration
-
-##### `STREMTHRU_INTEGRATION_GITHUB_USER`
-
-GitHub username.
-
-##### `STREMTHRU_INTEGRATION_GITHUB_TOKEN`
-
-GitHub Personal Access Token.
-
-#### MDBList Integration
-
-##### `STREMTHRU_INTEGRATION_MDBLIST_LIST_STALE_TIME`
-
-Stale time for list. e.g. `12h`.
-
-#### TMDB Integration
-
-TMDB integration needs an [Access Token](https://www.themoviedb.org/settings/api).
-
-##### `STREMTHRU_INTEGRATION_TMDB_ACCESS_TOKEN`
-
-API Read Access Token for TMDB.
-
-##### `STREMTHRU_INTEGRATION_TMDB_LIST_STALE_TIME`
-
-Stale time for list. e.g. `12h`.
-
-#### Trakt.tv Integration
-
-Trakt.tv integration needs an [OAuth App](https://trakt.tv/oauth/applications).
-
-The Redirect URI should point to the `/auth/trakt.tv/callback` endpoint of [`STREMTHRU_BASE_URL`](#stremthru_base_url).
-
-##### `STREMTHRU_INTEGRATION_TRAKT_CLIENT_ID`
-
-Client ID for Trakt.tv OAuth App.
-
-##### `STREMTHRU_INTEGRATION_TRAKT_CLIENT_SECRET`
-
-Client Secret for Trakt.tv OAuth App.
-
-##### `STREMTHRU_INTEGRATION_TRAKT_LIST_STALE_TIME`
-
-Stale time for list. e.g. `12h`.
-
-#### TVDB Integration
-
-TVDB integration needs an [API Key](https://www.thetvdb.com/dashboard/account/apikey).
-
-##### `STREMTHRU_INTEGRATION_TVDB_API_KEY`
-
-API Key for TVDB.
-
-##### `STREMTHRU_INTEGRATION_TVDB_LIST_STALE_TIME`
-
-Stale time for list. e.g. `12h`.
-
-#### `STREMTHRU_VAULT_SECRET`
-
-Secret for encrypting sensitive data.
-
-## Endpoints
-
-### Authentication
-
-**`X-StremThru-Authorization` Header**
-
-Basic auth header, e.g. `Basic dXNlcm5hbWU6cGFzc3dvcmQ=`
-
-`X-StremThru-Authorization` header is checked against `STREMTHRU_PROXY_AUTH` config.
-
-### Proxy
-
-#### Proxify Links
-
-Authorization is checked against `STREMTHRU_PROXY_AUTH` config.
-
-If `token` query parameter is present, the proxified link will not be encrypted.
-e.g. `dXNlcm5hbWU6cGFzc3dvcmQ=`
-
-Otherwise, if `X-StremThru-Authorization` header is present, the proxified link will be encrypted.
-e.g. `Basic dXNlcm5hbWU6cGFzc3dvcmQ=`
-
-**`GET /v0/proxy`**
-
-**Query Parameters**:
-
-- `url`: URL to proxify _(multiple)_
-- `exp`: Expiration time duration _(optional)_
-- `req_headers[i]`: Headers to add to the request for `url` at position `i` _(optional)_
-- `req_headers`: Fallback headers if `req_headers[i]` is missing _(optional)_
-- `filename[i]`: Filename for the `url` at position `i` _(optional)_
-- `token`: Token to use for authorization _(optional)_
-- `redirect`: Redirect to proxified url, valid for single `url` _(optional)_
-
-**`POST /v0/proxy`**
-
-**Request**:
-
-`x-www-form-urlencoded` body with the following fields:
-
-- `url`: URL to proxify _(multiple)_
-- `exp`: Expiration time duration _(optional)_
-- `req_headers[i]`: Headers to add to the request for `url` at position `i` _(optional)_
-- `req_headers`: Fallback headers if `req_headers[i]` is missing _(optional)_
-- `filename[i]`: Filename for the `url` at position `i` _(optional)_
-- `token`: Token to use for authorization _(optional)_
-
-**Response**:
-
-```json
-{
-  "items": ["string"],
-  "total_items": "int"
-}
+# View the generated config
+cat wgcf-profile.conf
 ```
 
-### Store
+#### Step 2: Create WireProxy Configuration
 
-This is a common interface for interacting with external stores.
+Create `wireproxy.conf`:
 
-If `X-StremThru-Store-Name` header is present, the value is used as store name. Otherwise,
-the first store configured for the user using `STREMTHRU_STORE_AUTH` config is used.
+```toml
+[Interface]
+PrivateKey = YOUR_PRIVATE_KEY_FROM_WGCF
+Address = 172.16.0.2/32
+Address = 2606:4700:110:xxxx::/128
+DNS = 1.1.1.1
 
-**Authentication**
+[Peer]
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = engage.cloudflareclient.com:2408
 
-If `STREMTHRU_STORE_AUTH` is configured, then proxy-authorized requests will be
-automatically authenticated for external stores.
+[Socks5]
+BindAddress = 127.0.0.1:1080
+```
 
-For non-proxy-authorized requests, the following HTTP headers are used:
+#### Step 3: Create Entrypoint Script
 
-- `X-StremThru-Store-Authorization`
-- `Authorization`
+Create `warp-entrypoint.sh`:
 
-Values for these headers will be forwarded to the external store.
+```bash
+#!/bin/sh
+set -e
 
-#### Get User
+echo "=== Starting WireProxy (Cloudflare WARP) ==="
 
-**`GET /v0/store/user`**
+# Start wireproxy in background
+/app/wireproxy -c /app/wireproxy.conf &
 
-Get information about authenticated user.
+# Wait for SOCKS5 proxy
+for i in $(seq 1 30); do
+    if nc -z 127.0.0.1 1080 2>/dev/null; then
+        echo "SOCKS5 proxy ready on 127.0.0.1:1080"
+        break
+    fi
+    sleep 1
+done
 
-**Response**:
+# Configure StremThru to use proxy
+export STREMTHRU_HTTP_PROXY="socks5://127.0.0.1:1080"
 
+echo "=== Starting StremThru ==="
+exec /app/stremthru
+```
+
+#### Step 4: Update Dockerfile
+
+Add WireProxy to your Dockerfile:
+
+```dockerfile
+# Download WireProxy
+FROM alpine AS wireproxy-downloader
+RUN apk add --no-cache curl
+RUN curl -Lo /wireproxy.tar.gz \
+    https://github.com/pufferffish/wireproxy/releases/download/v1.0.9/wireproxy_linux_amd64.tar.gz \
+    && tar -xzf /wireproxy.tar.gz -C / \
+    && chmod +x /wireproxy
+
+# Final image
+FROM alpine
+# ... other steps ...
+COPY --from=wireproxy-downloader /wireproxy ./wireproxy
+COPY wireproxy.conf ./wireproxy.conf
+COPY warp-entrypoint.sh ./warp-entrypoint.sh
+RUN chmod +x ./warp-entrypoint.sh
+
+CMD ["./warp-entrypoint.sh"]
+```
+
+### WARP Configuration
+
+| File | Purpose |
+|------|---------|
+| `wireproxy.conf` | WireProxy/WARP configuration |
+| `warp-entrypoint.sh` | Startup script for WARP + StremThru |
+| `wgcf-account.toml` | WARP account credentials (do not commit) |
+| `wgcf-profile.conf` | Generated WireGuard profile (do not commit) |
+
+### WARP Troubleshooting
+
+#### WARP Not Connecting
+
+```bash
+# Check logs for handshake
+heroku logs --tail | grep -i "handshake"
+
+# Expected output:
+# peer(bmXO…fgyo) - Sending handshake initiation
+# peer(bmXO…fgyo) - Received handshake response
+```
+
+#### Verify IP Changed
+
+```bash
+# Check exposed IP
+curl -H "X-StremThru-Authorization: Basic $(echo -n 'admin:pass' | base64)" \
+  https://your-app.herokuapp.com/v0/health/__debug__ | jq '.data.ip.exposed'
+
+# Should show Cloudflare IP (104.28.x.x), not Heroku IP
+```
+
+---
+
+## API Reference
+
+### Health Endpoints
+
+#### `GET /v0/health`
+
+Basic health check.
+
+**Response:**
 ```json
 {
   "data": {
-    "id": "string",
-    "email": "string",
-    "subscription_status": "UserSubscriptionStatus"
-    "has_usenet": "boolean"
+    "status": "ok"
   }
 }
 ```
 
-#### Add Magnet
+#### `GET /v0/health/__debug__`
 
-**`POST /v0/store/magnets`**
+Detailed debug information (requires auth).
 
-Add magnet link for download.
-
-**Request**:
-
-Magnet Link:
-
-```json
-{
-  "magnet": "string"
-}
+**Request:**
+```bash
+curl -H "X-StremThru-Authorization: Basic $(echo -n 'user:pass' | base64)" \
+  https://your-instance.com/v0/health/__debug__
 ```
 
-Torrent File Link:
-
-```json
-{
-  "torrent": "string"
-}
-```
-
-Torrent File:
-
-`multipart/form-data` request with a torrent file in `torrent` field.
-
-**Response**:
-
+**Response:**
 ```json
 {
   "data": {
-    "id": "string",
-    "hash": "string",
-    "magnet": "string",
-    "name": "string",
-    "size": "int",
-    "status": "MagnetStatus",
-    "private": "boolean",
-    "files": [
-      {
-        "index": "int",
-        "link": "string",
-        "name": "string",
-        "path": "string",
-        "size": "int",
-        "video_hash": "string"
+    "time": "2026-02-05T00:00:00Z",
+    "version": "0.96.5",
+    "user": {
+      "name": "admin",
+      "store": {
+        "default": "realdebrid",
+        "names": ["realdebrid"]
       }
-    ],
-    "added_at": "datetime"
+    },
+    "ip": {
+      "client": "YOUR_IP",
+      "exposed": {
+        "*": "104.28.228.78",
+        "download.real-debrid.com": "104.28.228.78"
+      },
+      "machine": "100.31.199.166",
+      "tunnel": {
+        "127.0.0.1:1080": "104.28.228.78"
+      }
+    }
   }
 }
 ```
 
-If `.status` is `downloaded`, `.files` will have the list of files.
+### Proxy Endpoints
 
-#### List Magnets
+#### `POST /v0/proxy`
 
-**`GET /v0/store/magnets`**
+Generate proxy URLs for direct links.
 
-List magnets on user's account.
-
-**Query Parameter**:
-
-- `limit`: min `1`, max `500`, default `100`
-- `offset`: min `0`, default `0`
-
-**Response**:
-
+**Request:**
 ```json
 {
-  "data": {
-    "items": [
-      {
-        "id": "string",
-        "hash": "string",
-        "name": "string",
-        "size": "int",
-        "status": "MagnetStatus",
-        "private": "boolean",
-        "added_at": "datetime"
-      }
-    ],
-    "total_items": "int"
-  }
+  "links": [
+    "https://download.real-debrid.com/d/XXXXX/file.mkv"
+  ]
 }
 ```
 
-#### Get Magnet
-
-**`GET /v0/store/magnets/{magnetId}`**
-
-Get magnet on user's account.
-
-**Path Parameter**:
-
-- `magnetId`: magnet id
-
-**Response**:
-
+**Response:**
 ```json
 {
   "data": {
-    "id": "string",
-    "hash": "string",
-    "name": "string",
-    "size": "int",
-    "status": "MagnetStatus",
-    "private": "boolean",
-    "files": [
-      {
-        "index": "int",
-        "link": "string",
-        "name": "string",
-        "path": "string",
-        "size": "int",
-        "video_hash": "string"
-      }
-    ],
-    "added_at": "datetime"
-  }
-}
-```
-
-#### Remove Magnet
-
-**`DELETE /v0/store/magnets/{magnetId}`**
-
-Remove magnet from user's account.
-
-**Path Parameter**:
-
-- `magnetId`: magnet id
-
-#### Check Magnet
-
-**`GET /v0/store/magnets/check`**
-
-Check magnet links.
-
-**Query Parameter**:
-
-- `magnet`: comma seperated magnet links (min `1`, max `500`)
-- `sid`: stremio stream id
-
-**Response**:
-
-```json
-{
-  "data": {
-    "items": [
-      {
-        "hash": "string",
-        "magnet": "string",
-        "status": "MagnetStatus",
-        "files": [
-          {
-            "index": "int",
-            "path": "string",
-            "name": "string",
-            "size": "int"
-            "video_hash": "string"
-          }
-        ]
-      }
+    "links": [
+      "https://your-instance.com/v0/proxy/TOKEN/file.mkv"
     ]
   }
 }
 ```
 
-If `.status` is `cached`, `.files` will have the list of files.
+#### `GET /v0/proxy/{token}`
 
-> [!NOTE]
-> For `offcloud`, the `.files` list is always empty.
+Access proxied content. Supports byte-range requests for video streaming.
 
-If `.files[].index` is `-1`, the index of the file is unknown and you should rely on `.name` instead.
+**Headers:**
+- `Range`: Standard HTTP range header for byte-serving
 
-If `.files[].size` is `-1`, the size of the file is unknown.
+### Store Endpoints
 
-#### Generate Link
+All store endpoints require authentication via `X-StremThru-Authorization` header.
 
-`POST /v0/store/link/generate`
+#### `GET /v0/store/user`
 
-Generate direct link for a file link.
+Get current user info from debrid service.
 
-**Request**:
-
-```json
-{
-  "link": "string"
-}
-```
-
-**Response**:
-
+**Response:**
 ```json
 {
   "data": {
-    "link": "string"
+    "id": "13059080",
+    "email": "user@example.com",
+    "subscription_status": "premium"
   }
 }
 ```
 
-> [!NOTE]
-> The generated direct link should be valid for 12 hours.
+#### `POST /v0/store/magnets`
 
-### Meta
+Add a magnet to the debrid service.
 
-#### Get ID Map
-
-**`GET /v0/meta/id-map/{idType}/{id}`**
-
-Get ID mapping for a given ID.
-
-**Path Parameters**:
-
-- `idType`: `movie` or `show`
-- `id`: IMDB ID, e.g. `tt0110912`
-
-**Response**:
-
+**Request:**
 ```json
 {
-  "type": "string",
-  "imdb": "string",
-  "tmdb": "string",
-  "tvdb": "string",
-  "trakt": "string"
+  "magnet": "magnet:?xt=urn:btih:HASH..."
 }
 ```
 
-### Stremio Addon
+**Response:**
+```json
+{
+  "data": {
+    "id": "TORRENT_ID",
+    "hash": "HASH",
+    "status": "downloading",
+    "files": [...]
+  }
+}
+```
 
-#### Store
+#### `GET /v0/store/magnets`
 
-`/stremio/store`
+List all magnets in your debrid account.
 
-Explore and Search Store Catalog.
+#### `GET /v0/store/magnets/check`
 
-#### Wrap
+Check if magnets are cached.
 
-`/stremio/wrap`
+**Query Parameters:**
+- `magnets[]`: Array of magnet URIs or hashes
 
-Stremio Addon to Wrap other Addons with StremThru.
+#### `POST /v0/store/link/generate`
 
-#### Sidekick
+Generate direct download link from a file link.
 
-`/stremio/sidekick`
+**Request:**
+```json
+{
+  "link": "https://real-debrid.com/file/XXXXX"
+}
+```
 
-Extra Features for Stremio.
+---
 
-### Enums
+## System Design
 
-#### MagnetStatus
+### Architecture Diagram
 
-- `cached`
-- `queued`
-- `downloading`
-- `processing`
-- `downloaded`
-- `uploading`
-- `failed`
-- `invalid`
-- `unknown`
+```mermaid
+flowchart TB
+    subgraph Client["Client Layer"]
+        Stremio[Stremio App]
+        Browser[Web Browser]
+    end
 
-#### UserSubscriptionStatus
+    subgraph StremThru["StremThru Application"]
+        direction TB
+        HTTP[HTTP Server<br/>:8080]
+        
+        subgraph Endpoints["Endpoint Handlers"]
+            Health[/health]
+            Proxy[/proxy]
+            Store[/store]
+            Addons[/stremio/*]
+        end
+        
+        subgraph Middleware["Middleware"]
+            Auth[Auth Middleware]
+            CORS[CORS Middleware]
+            Context[Store Context]
+        end
+        
+        subgraph Core["Core Services"]
+            StoreClient[Store Clients]
+            ProxyHandler[Proxy Handler]
+            Cache[Cache Layer]
+        end
+        
+        subgraph Network["Network Layer"]
+            WireProxy[WireProxy<br/>SOCKS5 :1080]
+            HTTPClient[HTTP Client]
+        end
+    end
 
-- `expired`
-- `premium`
-- `trial`
+    subgraph Storage["Storage"]
+        SQLite[(SQLite/Postgres)]
+        Redis[(Redis<br/>Optional)]
+    end
 
-## Usage
+    subgraph External["External Services"]
+        WARP[Cloudflare WARP]
+        RealDebrid[RealDebrid]
+        AllDebrid[AllDebrid]
+        Other[Other Debrids...]
+    end
 
-**Source**
+    Stremio --> HTTP
+    Browser --> HTTP
+    
+    HTTP --> Middleware
+    Middleware --> Endpoints
+    Endpoints --> Core
+    
+    Core --> SQLite
+    Core --> Redis
+    Core --> Network
+    
+    Network --> WireProxy
+    WireProxy --> WARP
+    WARP --> RealDebrid
+    WARP --> AllDebrid
+    WARP --> Other
+```
 
-```sh
-git clone https://github.com/MunifTanjim/stremthru
-cd stremthru
+### Request Flow
 
-# configure
-export STREMTHRU_PROXY_AUTH=username:password
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as StremThru
+    participant W as WireProxy
+    participant CF as Cloudflare WARP
+    participant RD as RealDebrid
 
-# run
+    C->>S: POST /v0/store/magnets<br/>Authorization: Basic xxx
+    
+    activate S
+    S->>S: Validate Auth
+    S->>S: Parse Request
+    S->>S: Get Store Context
+    
+    S->>W: SOCKS5 Connect
+    activate W
+    W->>CF: WireGuard Tunnel
+    activate CF
+    CF->>RD: POST /torrents/addMagnet<br/>IP: 104.28.x.x
+    activate RD
+    RD-->>CF: Torrent Added
+    deactivate RD
+    CF-->>W: Response
+    deactivate CF
+    W-->>S: Response
+    deactivate W
+    
+    S-->>C: {"data": {"id": "xxx", "status": "downloading"}}
+    deactivate S
+```
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    subgraph Input
+        Magnet[Magnet URI]
+        Torrent[.torrent File]
+        Link[Direct Link]
+    end
+    
+    subgraph Process
+        Parse[Parse Input]
+        Check[Check Cache]
+        Add[Add to Debrid]
+        Generate[Generate Link]
+        Proxify[Create Proxy URL]
+    end
+    
+    subgraph Output
+        ProxyURL[Proxy URL]
+        Stream[Video Stream]
+    end
+    
+    Magnet --> Parse
+    Torrent --> Parse
+    Link --> Parse
+    
+    Parse --> Check
+    Check -->|Cached| Generate
+    Check -->|Not Cached| Add
+    Add --> Generate
+    Generate --> Proxify
+    Proxify --> ProxyURL
+    ProxyURL --> Stream
+```
+
+### Component Interactions
+
+| Component | Responsibility | Interacts With |
+|-----------|---------------|----------------|
+| `main.go` | Application entry point, server setup | All components |
+| `internal/endpoint/*` | HTTP handlers for API endpoints | Middleware, Store clients |
+| `internal/config/*` | Configuration management | All components |
+| `internal/db/*` | Database operations | SQLite/PostgreSQL |
+| `store/*` | Debrid service clients | External APIs |
+| `internal/shared/*` | Shared utilities, proxy handler | HTTP client |
+| `WireProxy` | SOCKS5 proxy via WARP | Cloudflare network |
+
+---
+
+## Commands Reference
+
+### Go Commands
+
+```bash
+# Run the application
+go run --tags "fts5" .
+
+# Build binary
+go build --tags "fts5" -o stremthru
+
+# Run tests
+STREMTHRU_ENV=test go test -v ./...
+
+# Format code
+go fmt ./...
+
+# Download dependencies
+go mod download
+
+# Tidy dependencies
+go mod tidy
+```
+
+### Make Commands
+
+```bash
+# Build everything
+make all
+
+# Build binary only
+make build
+
+# Run locally
 make run
 
-# build and run
-make build
-./stremthru
+# Run tests
+make test
+
+# Format code
+make fmt
+
+# Clean build artifacts
+make clean
+
+# Build Docker image
+make docker-build
+
+# Run Docker container
+make docker-run
+
+# Push Docker image
+make docker-push
 ```
 
-**Docker**
+### Node/PNPM Commands
 
-```sh
-docker run --name stremthru -p 8080:8080 \
-  -e STREMTHRU_PROXY_AUTH=username:password \
-  muniftanjim/stremthru
+```bash
+# Install dependencies
+pnpm install
+
+# Build dashboard
+pnpm run dash:build
+
+# Run dashboard dev server
+pnpm run dash:dev
+
+# Lint staged files
+pnpm run lint:staged
+
+# Lint current commit
+pnpm run lint:commit:current
 ```
 
-**Docker Compose**
+### Heroku Commands
 
-```sh
-cp compose.example.yaml compose.yaml
+```bash
+# Login to Heroku
+heroku login
 
-docker compose up stremthru
+# Create app
+heroku create your-app-name --stack container
+
+# Set config vars
+heroku config:set KEY=VALUE -a your-app-name
+
+# View config
+heroku config -a your-app-name
+
+# Deploy
+git push heroku main
+
+# View logs
+heroku logs --tail -a your-app-name
+
+# Restart app
+heroku restart -a your-app-name
+
+# Open app
+heroku open -a your-app-name
+
+# Check dyno status
+heroku ps -a your-app-name
+
+# Run one-off command
+heroku run bash -a your-app-name
 ```
 
-## Related Resources
+---
 
-Cloudflare WARP:
+## Operations
 
-- [github.com/cmj2002/warp-docker](https://github.com/cmj2002/warp-docker)
+### Logging
 
-## Sponsors
+StremThru uses structured JSON logging:
 
-- [DanaramaPyjama](https://x.com/danaramaps4)
-- [Debridio](https://debridio.com)
+```json
+{"time":"2026-02-05T00:00:00Z","level":"INFO","msg":"stremthru listening on :8080"}
+```
+
+**Log Levels:**
+- `DEBUG`: Detailed debugging information
+- `INFO`: General operational messages
+- `WARN`: Warning messages
+- `ERROR`: Error messages
+
+**Viewing Logs:**
+```bash
+# Docker
+docker logs -f stremthru
+
+# Heroku
+heroku logs --tail -a your-app-name
+
+# Local
+go run . 2>&1 | jq .
+```
+
+### Monitoring
+
+#### Health Check
+
+```bash
+# Basic health
+curl https://your-instance.com/v0/health
+
+# Detailed debug (with auth)
+curl -H "X-StremThru-Authorization: Basic xxx" \
+  https://your-instance.com/v0/health/__debug__
+```
+
+#### Uptime Monitoring
+
+Configure external monitoring services (UptimeRobot, Pingdom) to hit:
+- Endpoint: `/v0/health`
+- Expected response: `{"data":{"status":"ok"}}`
+- Interval: 5 minutes
+
+### Database Management
+
+#### SQLite (Default)
+
+```bash
+# Location
+./data/stremthru.db
+
+# Backup
+cp ./data/stremthru.db ./data/stremthru.db.backup
+
+# Connect with CLI
+sqlite3 ./data/stremthru.db
+```
+
+#### PostgreSQL
+
+```bash
+# Connect
+psql $STREMTHRU_DATABASE_URI
+
+# Backup
+pg_dump $STREMTHRU_DATABASE_URI > backup.sql
+
+# Restore
+psql $STREMTHRU_DATABASE_URI < backup.sql
+```
+
+### Scaling Considerations
+
+| Factor | Recommendation |
+|--------|---------------|
+| **Concurrent Users** | Each user maintains connections to debrid APIs. Monitor API rate limits. |
+| **Memory** | ~50-100MB base. Increases with active streams. |
+| **CPU** | Low usage. Primarily I/O bound. |
+| **Storage** | SQLite file grows with metadata. Consider PostgreSQL for high volume. |
+| **Network** | Video content is proxied. Ensure sufficient bandwidth. |
+
+---
+
+## Security
+
+### Authentication
+
+StremThru uses HTTP Basic Authentication:
+
+```bash
+# Header format
+Authorization: Basic base64(username:password)
+
+# Or StremThru-specific header
+X-StremThru-Authorization: Basic base64(username:password)
+
+# Example
+curl -H "Authorization: Basic $(echo -n 'admin:password' | base64)" \
+  https://your-instance.com/v0/store/user
+```
+
+### IP Privacy Model
+
+```mermaid
+flowchart LR
+    subgraph "What Each Service Sees"
+        direction TB
+        
+        subgraph You["Your Device"]
+            YourIP["Your IP: 1.2.3.4"]
+        end
+        
+        subgraph ST["StremThru"]
+            STSees["Sees: 1.2.3.4"]
+        end
+        
+        subgraph WARP["Cloudflare WARP"]
+            WARPSees["Sees: StremThru Internal"]
+        end
+        
+        subgraph RD["RealDebrid"]
+            RDSees["Sees: 104.28.x.x<br/>(Cloudflare IP)"]
+        end
+    end
+    
+    You --> ST
+    ST --> WARP
+    WARP --> RD
+    
+    style RDSees fill:#c8e6c9
+```
+
+**Key Points:**
+- Your IP is visible only to StremThru
+- RealDebrid never sees your IP
+- With WARP, RealDebrid sees Cloudflare's IP
+- Without WARP, RealDebrid sees StremThru's server IP
+
+### Secrets Handling
+
+| Secret | Storage | Notes |
+|--------|---------|-------|
+| `STREMTHRU_PROXY_AUTH` | Environment variable | Never commit to git |
+| `STREMTHRU_STORE_AUTH` | Environment variable | Contains debrid API keys |
+| `wireproxy.conf` | File (gitignored) | Contains WARP private key |
+| `wgcf-account.toml` | File (gitignored) | WARP account credentials |
+
+**Best Practices:**
+1. Use environment variables for secrets
+2. Never commit `.env` files
+3. Use Heroku config vars or Docker secrets in production
+4. Rotate API keys periodically
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### Application Won't Start
+
+```bash
+# Check logs
+docker logs stremthru
+
+# Verify environment variables are set
+heroku config -a your-app-name
+
+# Check database connectivity
+sqlite3 ./data/stremthru.db "SELECT 1;"
+```
+
+#### RealDebrid Connection Failed
+
+```bash
+# Verify API token
+curl -H "Authorization: Bearer YOUR_RD_TOKEN" \
+  https://api.real-debrid.com/rest/1.0/user
+
+# Check StremThru store config
+curl -H "X-StremThru-Authorization: Basic xxx" \
+  https://your-instance.com/v0/health/__debug__ | jq '.data.user'
+```
+
+#### WARP Not Working
+
+```bash
+# Check WireProxy logs
+heroku logs --tail | grep -i "peer"
+
+# Verify SOCKS5 proxy is running
+heroku run "nc -z 127.0.0.1 1080" -a your-app-name
+
+# Check exposed IP
+curl -H "X-StremThru-Authorization: Basic xxx" \
+  https://your-instance.com/v0/health/__debug__ | jq '.data.ip.exposed'
+```
+
+#### Stream Not Playing
+
+```bash
+# Test proxy URL directly
+curl -I "https://your-instance.com/v0/proxy/TOKEN/file.mkv"
+
+# Check for byte-range support
+curl -H "Range: bytes=0-1000" -I "https://your-instance.com/v0/proxy/TOKEN/file.mkv"
+```
+
+---
+
+## Contributing
+
+### Repository Structure
+
+```
+stremthru/
+├── apps/
+│   └── dash/              # Frontend dashboard (TanStack Start)
+├── core/                  # Core utilities
+│   ├── error.go          # Error handling
+│   ├── magnet.go         # Magnet link parsing
+│   └── request.go        # HTTP utilities
+├── internal/
+│   ├── config/           # Configuration management
+│   ├── db/               # Database layer
+│   ├── endpoint/         # HTTP endpoint handlers
+│   ├── shared/           # Shared utilities
+│   └── worker/           # Background workers
+├── migrations/           # Database migrations
+├── store/
+│   ├── realdebrid/      # RealDebrid client
+│   ├── alldebrid/       # AllDebrid client
+│   └── .../             # Other debrid clients
+├── stremio/             # Stremio addon definitions
+├── Dockerfile           # Multi-stage Docker build
+├── app.json             # Heroku app manifest
+├── heroku.yml           # Heroku container config
+├── wireproxy.conf       # WARP proxy config
+└── warp-entrypoint.sh   # WARP startup script
+```
+
+### Coding Standards
+
+#### Go
+
+- Follow [Effective Go](https://go.dev/doc/effective_go)
+- Use `go fmt` for formatting
+- Run `go vet` before committing
+- Write table-driven tests
+
+#### TypeScript (Dashboard)
+
+- Use ESLint configuration provided
+- Follow Prettier formatting
+- Use TypeScript strict mode
+
+#### Commits
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```bash
+feat: add support for new debrid service
+fix: resolve proxy timeout issue
+docs: update README with WARP setup
+chore: update dependencies
+```
+
+### Pull Request Process
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feat/my-feature`
+3. Make your changes
+4. Run tests: `make test`
+5. Format code: `make fmt`
+6. Commit with conventional commit message
+7. Push and create Pull Request
+8. Wait for CI checks and review
+
+---
 
 ## License
 
-Licensed under the MIT License. Check the [LICENSE](./LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+**Made with ❤️ for the streaming community**
+
+[Report Bug](https://github.com/MunifTanjim/stremthru/issues) · [Request Feature](https://github.com/MunifTanjim/stremthru/issues)
+
+</div>
