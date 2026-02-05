@@ -44,3 +44,5 @@ go.work.sum
 ## Others
 .yarn-integrity
 node_modules
+wgcf-account.toml
+wgcf-profile.conf

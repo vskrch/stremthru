@@ -40,14 +40,28 @@ COPY --from=dashboard-builder /workspace/apps/dash/.output/public/ ./internal/da
 
 RUN CGO_ENABLED=1 GOOS=linux go build --tags 'fts5' -o ./stremthru -a -ldflags '-linkmode external -extldflags "-static"'
 
-# Stage 3: Final runtime image
+# Stage 3: Download WireProxy
+FROM alpine AS wireproxy-downloader
+
+RUN apk add --no-cache curl
+RUN curl -Lo /wireproxy.tar.gz https://github.com/pufferffish/wireproxy/releases/download/v1.0.9/wireproxy_linux_amd64.tar.gz \
+    && tar -xzf /wireproxy.tar.gz -C / \
+    && chmod +x /wireproxy
+
+# Stage 4: Final runtime image
 FROM alpine
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git netcat-openbsd
 
 WORKDIR /app
 
 COPY --from=builder /workspace/stremthru ./stremthru
+COPY --from=wireproxy-downloader /wireproxy ./wireproxy
+
+# Copy WARP configuration and entrypoint
+COPY wireproxy.conf ./wireproxy.conf
+COPY warp-entrypoint.sh ./warp-entrypoint.sh
+RUN chmod +x ./warp-entrypoint.sh
 
 # Create data directory
 RUN mkdir -p /app/data
@@ -59,4 +73,4 @@ ENV STREMTHRU_ENV=prod
 EXPOSE 8080
 
 ENTRYPOINT []
-CMD ["./stremthru"]
+CMD ["./warp-entrypoint.sh"]
