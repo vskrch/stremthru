@@ -162,3 +162,24 @@ func (m *Monitor) GetLastSpeedTest() *SpeedTestResult {
 	defer m.mu.RUnlock()
 	return m.lastSpeedTest
 }
+
+// downloadFile performs a download and returns bytes written and duration
+func downloadFile(client *http.Client, url string) (int64, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	written, err := io.Copy(io.Discard, resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	return written, nil
+}
