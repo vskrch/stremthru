@@ -51,6 +51,7 @@ func main() {
 	endpoint.AddTorrentEndpoints(mux)
 	endpoint.AddTorznabEndpoints(mux)
 	endpoint.AddExperimentEndpoints(mux)
+	endpoint.AddStatusEndpoints(mux)
 
 	handler := shared.RootServerContext(mux)
 
