@@ -1,0 +1,15 @@
+services:
+  stremthru:
+    image: stremthru:latest
+    container_name: stremthru
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      # - ./wireproxy.conf:/app/wireproxy.conf:ro # Optional: Mount your own WireGuard configuration
+    environment:
+      - STREMTHRU_ENV=prod
+      # Add other environment variables as needed
+      # - STREMTHRU_LOG_LEVEL=info
+      # user: "1000:1000" # Optional: run as non-root user if needed, though Dockerfile uses root currently
