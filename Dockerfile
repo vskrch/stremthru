@@ -66,6 +66,11 @@ COPY wireproxy.conf ./wireproxy.conf
 COPY warp-entrypoint.sh ./warp-entrypoint.sh
 RUN chmod +x ./warp-entrypoint.sh
 
+# Link image to GitHub Repository (Enables Open Source/Public Visibility)
+LABEL org.opencontainers.image.source="https://github.com/vskrch/stremthru"
+LABEL org.opencontainers.image.description="StremThru Docker Image for OCI"
+LABEL org.opencontainers.image.licenses="MIT"
+
 # Create data directory
 RUN mkdir -p /app/data
 

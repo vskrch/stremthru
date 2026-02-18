@@ -1,6 +1,6 @@
 services:
   stremthru:
-    image: stremthru:latest
+    image: ${STREMTHRU_IMAGE:-ghcr.io/vskrch/stremthru:latest}
     container_name: stremthru
     restart: unless-stopped
     ports:
